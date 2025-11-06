@@ -23,12 +23,11 @@
             height: 100vh;
         }
 
-        /* Vídeo que vai capturar da câmera */
+        /* Vídeo da câmera (sem inversão) */
         #camera {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1); /* Espelha o vídeo */
         }
 
         /* Metade da tela com a cor vermelha (olho esquerdo) */
@@ -39,6 +38,7 @@
             width: 50%;
             height: 100%;
             background-color: red; /* Cor vermelha para o olho esquerdo */
+            z-index: 1;
         }
 
         /* Metade da tela com a cor verde (olho direito) */
@@ -49,6 +49,7 @@
             width: 50%;
             height: 100%;
             background-color: green; /* Cor verde para o olho direito */
+            z-index: 1;
         }
 
     </style>
