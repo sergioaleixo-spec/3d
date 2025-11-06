@@ -1,87 +1,66 @@
 <!DOCTYPE html>
-<html lang="pt">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Óculos Anáglifo Vermelho/Verde</title>
+    <title>Anaglyph 3D com Webcam</title>
     <style>
         body {
-            margin: 0;
-            padding: 0;
             display: flex;
             justify-content: center;
             align-items: center;
+            flex-direction: column;
             height: 100vh;
-            background-color: #000;
-            overflow: hidden;
+            background-color: black;
+            color: white;
         }
-
-        /* Container que vai manter o vídeo */
-        #cameraContainer {
+        #video {
             position: relative;
-            width: 100vw;
-            height: 100vh;
+            width: 640px;
+            height: 480px;
+            filter: grayscale(100%);
+            mix-blend-mode: multiply;
         }
-
-        /* Vídeo da câmera (sem inversão) */
-        #camera {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        /* Metade da tela com a cor vermelha (olho esquerdo) */
-        #leftEye {
+        .filter {
             position: absolute;
             top: 0;
             left: 0;
-            width: 50%;
-            height: 100%;
-            background-color: red; /* Cor vermelha para o olho esquerdo */
-            z-index: 1;
+            width: 640px;
+            height: 480px;
         }
-
-        /* Metade da tela com a cor verde (olho direito) */
-        #rightEye {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 50%;
-            height: 100%;
-            background-color: green; /* Cor verde para o olho direito */
-            z-index: 1;
+        .red-filter {
+            background: rgba(255, 0, 0, 0.5);
+            mix-blend-mode: screen;
         }
-
+        .cyan-filter {
+            background: rgba(0, 255, 255, 0.5);
+            mix-blend-mode: multiply;
+        }
     </style>
 </head>
 <body>
 
-    <div id="cameraContainer">
-        <video id="camera" autoplay></video>
-        <div id="leftEye"></div> <!-- Cor vermelha para o olho esquerdo -->
-        <div id="rightEye"></div> <!-- Cor verde para o olho direito -->
-    </div>
+<h1>Anaglyph 3D com Webcam</h1>
+<video id="video" autoplay></video>
+<button id="startButton">Iniciar Câmera</button>
+<div class="filter red-filter"></div>
+<div class="filter cyan-filter"></div>
 
-    <script>
-        // Função para acessar a câmera traseira
-        async function startCamera() {
-            const video = document.getElementById('camera');
-            const constraints = {
-                video: { facingMode: 'environment' }  // Força a câmera traseira
-            };
+<script>
+    const video = document.getElementById('video');
+    const startButton = document.getElementById('startButton');
 
-            try {
-                // Acessa a câmera traseira do dispositivo
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-            } catch (err) {
-                console.error("Erro ao acessar a câmera:", err);
-            }
+    startButton.addEventListener('click', async () => {
+        try {
+            let stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: { exact: "environment" } } // Acesse a câmera traseira
+            });
+            video.srcObject = stream;
+        } catch (error) {
+            console.error("Erro ao acessar a câmera:", error);
         }
-
-        // Chama a função para iniciar a câmera traseira
-        startCamera();
-    </script>
+    });
+</script>
 
 </body>
 </html>
