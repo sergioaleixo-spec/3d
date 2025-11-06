@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Efeito Anáglifo 3D</title>
+    <title>Efeito Anáglifo 3D e Troca de Câmera</title>
     <style>
         body {
             margin: 0;
@@ -13,47 +13,95 @@
             align-items: center;
             height: 100vh;
             background-color: #000;
+            overflow: hidden;
         }
+
+        /* Container que vai manter o vídeo */
+        #cameraContainer {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* Vídeo que vai capturar da câmera */
         #camera {
-            width: 80%;
-            height: 80%;
-            transform: scaleX(-1); /* Espelha a imagem da câmera para parecer mais natural */
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Espelha o vídeo */
         }
-        .anaglyph {
+
+        /* Metade do ecrã que vai ter a cor invertida */
+        #invertEffect {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
+            width: 50%;
             height: 100%;
-            mix-blend-mode: color-dodge;
+            background-color: rgba(0, 0, 0, 0.5);
+            filter: invert(1);
         }
-        .red {
-            filter: sepia(1) saturate(10) hue-rotate(-45deg);
-        }
-        .blue {
-            filter: sepia(1) saturate(10) hue-rotate(150deg);
+
+        /* Botão para trocar de câmera */
+        #switchButton {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
         }
     </style>
 </head>
 <body>
-    <video id="camera" autoplay></video>
-    <div class="anaglyph red" id="left-eye"></div>
-    <div class="anaglyph blue" id="right-eye"></div>
+
+    <div id="cameraContainer">
+        <video id="camera" autoplay></video>
+        <div id="invertEffect"></div> <!-- Metade com efeito invertido -->
+        <button id="switchButton">Trocar Câmera</button>
+    </div>
 
     <script>
+        let currentStream = null;
+        let currentFacingMode = 'environment'; // 'user' para frontal, 'environment' para traseira
+
         // Função para acessar a câmera
-        async function startCamera() {
+        async function startCamera(facingMode) {
             const video = document.getElementById('camera');
+            const constraints = {
+                video: { facingMode: facingMode }
+            };
+
+            // Se já tiver uma câmera ativa, interrompe o stream antigo
+            if (currentStream) {
+                const tracks = currentStream.getTracks();
+                tracks.forEach(track => track.stop());
+            }
+
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
+                currentStream = stream;
             } catch (err) {
                 console.error("Erro ao acessar a câmera:", err);
             }
         }
 
-        // Chama a função de início da câmera
-        startCamera();
+        // Função para trocar a câmera
+        function switchCamera() {
+            currentFacingMode = (currentFacingMode === 'environment') ? 'user' : 'environment';
+            startCamera(currentFacingMode);
+        }
+
+        // Inicia a câmera com a câmera traseira (default)
+        startCamera(currentFacingMode);
+
+        // Evento para trocar a câmera quando clicar no botão
+        document.getElementById('switchButton').addEventListener('click', switchCamera);
     </script>
+
 </body>
 </html>
