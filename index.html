@@ -1,66 +1,179 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
+<!doctype html>
+<html lang="pt-PT">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Anaglyph 3D com Webcam</title>
-    <style>
-        body {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-direction: column;
-            height: 100vh;
-            background-color: black;
-            color: white;
-        }
-        #video {
-            position: relative;
-            width: 640px;
-            height: 480px;
-            filter: grayscale(100%);
-            mix-blend-mode: multiply;
-        }
-        .filter {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 640px;
-            height: 480px;
-        }
-        .red-filter {
-            background: rgba(255, 0, 0, 0.5);
-            mix-blend-mode: screen;
-        }
-        .cyan-filter {
-            background: rgba(0, 255, 255, 0.5);
-            mix-blend-mode: multiply;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Anaglyph Camera — vermelho/ciano</title>
+  <style>
+    html,body { height:100%; margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#111; color:#eee; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; }
+    header { width:100%; padding:12px; box-sizing:border-box; text-align:center; }
+    main { display:flex; flex-direction:column; gap:10px; align-items:center; width:100%; max-width:900px; padding:0 12px 24px; box-sizing:border-box; }
+    video{ display:none; } /* escondemos o vídeo cru, usamos o canvas */
+    canvas{ width:100%; max-width:900px; background:#000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
+    .controls{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center; }
+    label{ font-size:14px; color:#ddd; }
+    .btn{ background:#1f6feb; color:white; padding:8px 12px; border-radius:6px; border:0; font-weight:600; }
+    .small{ font-size:13px; color:#bbb; }
+    footer{ color:#999; font-size:13px; margin-top:6px; text-align:center; }
+    input[type=range]{ width:180px; }
+  </style>
 </head>
 <body>
+  <header>
+    <h1>Anaglyph Camera (vermelho / ciano)</h1>
+    <div class="small">Permite usar a câmara traseira e aplicar um filtro anaglyph em tempo real.</div>
+  </header>
 
-<h1>Anaglyph 3D com Webcam</h1>
-<video id="video" autoplay></video>
-<button id="startButton">Iniciar Câmera</button>
-<div class="filter red-filter"></div>
-<div class="filter cyan-filter"></div>
+  <main>
+    <video id="video" autoplay playsinline></video>
+    <canvas id="canvas"></canvas>
+
+    <div class="controls">
+      <label>Deslocamento: <span id="shiftVal">12</span> px</label>
+      <input id="shift" type="range" min="0" max="60" value="12">
+      <button id="toggleMirror" class="btn">Espelhar: OFF</button>
+      <button id="snap" class="btn">Capturar frame</button>
+    </div>
+
+    <div class="small">Usa óculos <strong>vermelho / ciano</strong> para ver o efeito. Para melhor resultado, move o dispositivo lentamente para simular parallax.</div>
+  </main>
+
+  <footer>Se a câmara não abrir, garante que o site está servido via HTTPS (ou em localhost).</footer>
 
 <script>
-    const video = document.getElementById('video');
-    const startButton = document.getElementById('startButton');
+(async function(){
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-    startButton.addEventListener('click', async () => {
-        try {
-            let stream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: { exact: "environment" } } // Acesse a câmera traseira
-            });
-            video.srcObject = stream;
-        } catch (error) {
-            console.error("Erro ao acessar a câmera:", error);
-        }
-    });
+  const shiftRange = document.getElementById('shift');
+  const shiftVal = document.getElementById('shiftVal');
+  const toggleMirror = document.getElementById('toggleMirror');
+  const snap = document.getElementById('snap');
+
+  let mirror = false;
+  let stream;
+
+  shiftRange.addEventListener('input', ()=> shiftVal.textContent = shiftRange.value);
+  toggleMirror.addEventListener('click', ()=>{
+    mirror = !mirror;
+    toggleMirror.textContent = `Espelhar: ${mirror ? 'ON' : 'OFF'}`;
+  });
+
+  snap.addEventListener('click', ()=>{
+    // abrir imagem num separador novo
+    const data = canvas.toDataURL('image/png');
+    const w = window.open('', '_blank');
+    if(w){
+      w.document.write('<title>Captura Anaglyph</title><img src="'+data+'" style="max-width:100%"/>');
+    } else {
+      alert('Pop-up bloqueado — permite pop-ups para guardar a imagem.');
+    }
+  });
+
+  // pede a câmara traseira (environment). Alguns navegadores ignoram facingMode em certos contextos; usa também facingMode fallback
+  const constraints = {
+    audio: false,
+    video: {
+      facingMode: { ideal: "environment" },
+      width: { ideal: 1280 },
+      height: { ideal: 720 }
+    }
+  };
+
+  try {
+    stream = await navigator.mediaDevices.getUserMedia(constraints);
+    video.srcObject = stream;
+  } catch(err) {
+    console.error('Erro ao aceder à câmara:', err);
+    alert('Não foi possível aceder à câmara. Confirma as permissões e que o site está em HTTPS.');
+    return;
+  }
+
+  // quando o vídeo tiver metadata, ajustamos canvas
+  await new Promise(res => video.onloadedmetadata = res);
+
+  function resizeCanvas() {
+    const aspect = video.videoWidth / video.videoHeight || 16/9;
+    // definimos largura fixa relativa ao ecrã para mobile
+    const maxW = Math.min(window.innerWidth - 24, 900);
+    const w = Math.max(320, Math.floor(maxW));
+    const h = Math.floor(w / aspect);
+    canvas.width = w;
+    canvas.height = h;
+    canvas.style.height = (h * (Math.min(maxW, w) / w)) + 'px'; // garante boa renderização visual
+  }
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  // função que aplica o anaglyph (vermelho da imagem deslocada para a esquerda, ciano da imagem deslocada para a direita)
+  function renderAnaglyph() {
+    const w = canvas.width, h = canvas.height;
+    // desenha frame do vídeo para uma imagem temporária
+    // desenhamos duas cópias deslocadas
+    const shift = Number(shiftRange.value);
+
+    // desenha base (direita) para obter canais G+B (ciano)
+    // primeiro desenha o vídeo normal
+    ctx.clearRect(0,0,w,h);
+
+    // criamos dois buffers no canvas: uma forma simples é desenhar video duas vezes em áreas separadas do canvas e ler pixels; mas para performance podemos ler uma vez e manipular
+    // desenha o vídeo inteiro numa camada offscreen (no próprio canvas) e ler os dados
+    // criar offscreen imagem:
+    // nota: para mobile performance, reduzimos resolução se for muito grande
+    ctx.drawImage(video, 0, 0, w, h);
+    let frame = ctx.getImageData(0,0,w,h);
+    let data = frame.data;
+
+    // copiamos para outra array para deslocamento
+    // cria um array para saída
+    const out = new Uint8ClampedArray(data.length);
+
+    // para cada pixel (x,y) calcular do pixel x-shift (vermelho) e x+shift (ciano)
+    // iteramos y inner to outer for cache
+    for (let y=0; y<h; y++){
+      for (let x=0; x<w; x++){
+        const i = (y*w + x) * 4;
+
+        // índice fonte para vermelho (esquerda - shift)
+        let sx = x - shift;
+        if (sx < 0) sx = 0;
+        const si_r = (y*w + sx) * 4;
+
+        // índice fonte para ciano (direita + shift)
+        let dx = x + shift;
+        if (dx >= w) dx = w - 1;
+        const si_c = (y*w + dx) * 4;
+
+        // vermelho: só canal R do si_r
+        out[i]   = data[si_r];      // R
+        // verde: do si_c (ciano usa G + B)
+        out[i+1] = data[si_c+1];    // G
+        // azul: do si_c
+        out[i+2] = data[si_c+2];    // B
+        // alpha: média ou 255
+        out[i+3] = 255;
+      }
+    }
+
+    // coloca saída no canvas
+    const outImg = new ImageData(out, w, h);
+    ctx.putImageData(outImg, 0, 0);
+
+    // se o utilizador quiser espelhar (útil em algumas câmaras), aplicamos transformação visual no CSS:
+    if (mirror) {
+      canvas.style.transform = 'scaleX(-1)';
+    } else {
+      canvas.style.transform = 'none';
+    }
+
+    requestAnimationFrame(renderAnaglyph);
+  }
+
+  // iniciar loop quando o vídeo começa a correr
+  requestAnimationFrame(renderAnaglyph);
+
+})();
 </script>
-
 </body>
 </html>
