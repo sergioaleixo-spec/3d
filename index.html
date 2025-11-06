@@ -3,176 +3,163 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Anaglyph Camera — vermelho/ciano</title>
+  <title>Ver anaglyph sem óculos (L/R)</title>
   <style>
-    html,body { height:100%; margin:0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; background:#111; color:#eee; display:flex; flex-direction:column; align-items:center; justify-content:flex-start; }
-    header { width:100%; padding:12px; box-sizing:border-box; text-align:center; }
-    main { display:flex; flex-direction:column; gap:10px; align-items:center; width:100%; max-width:900px; padding:0 12px 24px; box-sizing:border-box; }
-    video{ display:none; } /* escondemos o vídeo cru, usamos o canvas */
-    canvas{ width:100%; max-width:900px; background:#000; border-radius:8px; box-shadow:0 6px 20px rgba(0,0,0,0.6); }
-    .controls{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:center; }
-    label{ font-size:14px; color:#ddd; }
-    .btn{ background:#1f6feb; color:white; padding:8px 12px; border-radius:6px; border:0; font-weight:600; }
-    .small{ font-size:13px; color:#bbb; }
-    footer{ color:#999; font-size:13px; margin-top:6px; text-align:center; }
-    input[type=range]{ width:180px; }
+    :root { color-scheme: dark; }
+    html,body { margin:0; height:100%; background:#0b0b0b; color:#eee; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+    .bar{ padding:8px 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; background:#111; border-bottom:1px solid #222; }
+    .bar label{ font-size:13px; color:#ccc; }
+    .bar input[type=range]{ width:140px; }
+    .btn{ background:#2b6eea; color:#fff; border:0; padding:6px 10px; border-radius:6px; font-weight:600; }
+    #wrap{ position:fixed; inset:46px 0 0 0; display:flex; }
+    canvas{ width:50vw; height:100%; display:block; background:#000; }
+    #left{ border-right:2px solid #333; }
+    #divider{ position:fixed; top:46px; bottom:0; left:50%; width:2px; background:#bbb; pointer-events:none; mix-blend-mode:screen; }
+    video{ display:none; }
+    .hint{ font-size:12px; color:#aaa; margin-left:auto; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Anaglyph Camera (vermelho / ciano)</h1>
-    <div class="small">Permite usar a câmara traseira e aplicar um filtro anaglyph em tempo real.</div>
-  </header>
+  <div class="bar">
+    <button id="flip" class="btn">Espelhar: OFF</button>
+    <label>Zoom <span id="zv">1.00×</span>
+      <input id="zoom" type="range" min="1" max="3" step="0.01" value="1">
+    </label>
+    <label>Offset X <span id="oxv">0</span>px
+      <input id="ox" type="range" min="-80" max="80" step="1" value="0">
+    </label>
+    <label>Brilho <span id="bv">1.00</span>
+      <input id="bright" type="range" min="0.5" max="2" step="0.01" value="1">
+    </label>
+    <label>Gama <span id="gv">1.00</span>
+      <input id="gamma" type="range" min="0.5" max="2" step="0.01" value="1">
+    </label>
+    <span class="hint">Coloca um separador (cartão) ao centro do ecrã; olho E vê esquerda, olho D vê direita.</span>
+  </div>
 
-  <main>
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
+  <div id="wrap">
+    <canvas id="left"></canvas>
+    <canvas id="right"></canvas>
+    <div id="divider"></div>
+  </div>
 
-    <div class="controls">
-      <label>Deslocamento: <span id="shiftVal">12</span> px</label>
-      <input id="shift" type="range" min="0" max="60" value="12">
-      <button id="toggleMirror" class="btn">Espelhar: OFF</button>
-      <button id="snap" class="btn">Capturar frame</button>
-    </div>
-
-    <div class="small">Usa óculos <strong>vermelho / ciano</strong> para ver o efeito. Para melhor resultado, move o dispositivo lentamente para simular parallax.</div>
-  </main>
-
-  <footer>Se a câmara não abrir, garante que o site está servido via HTTPS (ou em localhost).</footer>
+  <video id="video" autoplay playsinline></video>
 
 <script>
 (async function(){
   const video = document.getElementById('video');
-  const canvas = document.getElementById('canvas');
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const left = document.getElementById('left');
+  const right = document.getElementById('right');
+  const lctx = left.getContext('2d', { willReadFrequently:true });
+  const rctx = right.getContext('2d', { willReadFrequently:true });
 
-  const shiftRange = document.getElementById('shift');
-  const shiftVal = document.getElementById('shiftVal');
-  const toggleMirror = document.getElementById('toggleMirror');
-  const snap = document.getElementById('snap');
+  const zoom = document.getElementById('zoom');
+  const zv = document.getElementById('zv');
+  const ox = document.getElementById('ox');
+  const oxv = document.getElementById('oxv');
+  const bright = document.getElementById('bright');
+  const bv = document.getElementById('bv');
+  const gamma = document.getElementById('gamma');
+  const gv = document.getElementById('gv');
+  const flipBtn = document.getElementById('flip');
 
   let mirror = false;
-  let stream;
 
-  shiftRange.addEventListener('input', ()=> shiftVal.textContent = shiftRange.value);
-  toggleMirror.addEventListener('click', ()=>{
+  function fitCanvases(){
+    const w = Math.floor(window.innerWidth/2);
+    const h = window.innerHeight - document.querySelector('.bar').offsetHeight;
+    [left, right].forEach(c => { c.width = w; c.height = h; });
+  }
+  fitCanvases();
+  addEventListener('resize', fitCanvases);
+
+  flipBtn.onclick = () => {
     mirror = !mirror;
-    toggleMirror.textContent = `Espelhar: ${mirror ? 'ON' : 'OFF'}`;
-  });
-
-  snap.addEventListener('click', ()=>{
-    // abrir imagem num separador novo
-    const data = canvas.toDataURL('image/png');
-    const w = window.open('', '_blank');
-    if(w){
-      w.document.write('<title>Captura Anaglyph</title><img src="'+data+'" style="max-width:100%"/>');
-    } else {
-      alert('Pop-up bloqueado — permite pop-ups para guardar a imagem.');
-    }
-  });
-
-  // pede a câmara traseira (environment). Alguns navegadores ignoram facingMode em certos contextos; usa também facingMode fallback
-  const constraints = {
-    audio: false,
-    video: {
-      facingMode: { ideal: "environment" },
-      width: { ideal: 1280 },
-      height: { ideal: 720 }
-    }
+    flipBtn.textContent = `Espelhar: ${mirror ? 'ON' : 'OFF'}`;
   };
+  zoom.oninput = ()=> zv.textContent = `${(+zoom.value).toFixed(2)}×`;
+  ox.oninput = ()=> oxv.textContent = `${ox.value}`;
+  bright.oninput = ()=> bv.textContent = `${(+bright.value).toFixed(2)}`;
+  gamma.oninput = ()=> gv.textContent = `${(+gamma.value).toFixed(2)}`;
 
-  try {
-    stream = await navigator.mediaDevices.getUserMedia(constraints);
+  // pedir câmara traseira
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal:1080 } },
+      audio: false
+    });
     video.srcObject = stream;
-  } catch(err) {
-    console.error('Erro ao aceder à câmara:', err);
-    alert('Não foi possível aceder à câmara. Confirma as permissões e que o site está em HTTPS.');
+  }catch(e){
+    alert('Erro a aceder à câmara. Usa HTTPS (ou localhost) e permite a permissão.');
+    console.error(e);
     return;
   }
+  await new Promise(r => video.onloadedmetadata = r);
 
-  // quando o vídeo tiver metadata, ajustamos canvas
-  await new Promise(res => video.onloadedmetadata = res);
+  function clamp(v, a, b){ return Math.max(a, Math.min(b, v)); }
+  function applyGamma(v, g){ return 255 * Math.pow(v/255, 1/g); }
 
-  function resizeCanvas() {
-    const aspect = video.videoWidth / video.videoHeight || 16/9;
-    // definimos largura fixa relativa ao ecrã para mobile
-    const maxW = Math.min(window.innerWidth - 24, 900);
-    const w = Math.max(320, Math.floor(maxW));
-    const h = Math.floor(w / aspect);
-    canvas.width = w;
-    canvas.height = h;
-    canvas.style.height = (h * (Math.min(maxW, w) / w)) + 'px'; // garante boa renderização visual
-  }
-  resizeCanvas();
-  window.addEventListener('resize', resizeCanvas);
+  function draw(){
+    const lw = left.width, lh = left.height;
+    const rw = right.width, rh = right.height;
 
-  // função que aplica o anaglyph (vermelho da imagem deslocada para a esquerda, ciano da imagem deslocada para a direita)
-  function renderAnaglyph() {
-    const w = canvas.width, h = canvas.height;
-    // desenha frame do vídeo para uma imagem temporária
-    // desenhamos duas cópias deslocadas
-    const shift = Number(shiftRange.value);
+    // calcular área de captura do vídeo (manter proporção)
+    const z = Number(zoom.value);
+    const srcW = Math.floor(Math.min(video.videoWidth, video.videoWidth / z));
+    const srcH = Math.floor(Math.min(video.videoHeight, video.videoHeight / z));
+    const cx = Math.floor((video.videoWidth - srcW)/2 + Number(ox.value));
+    const cy = Math.floor((video.videoHeight - srcH)/2);
 
-    // desenha base (direita) para obter canais G+B (ciano)
-    // primeiro desenha o vídeo normal
-    ctx.clearRect(0,0,w,h);
+    // desenhar frame base temporário num offscreen
+    // (usamos o próprio left como buffer de leitura para evitar alocar offscreen extra)
+    lctx.drawImage(video, cx, cy, srcW, srcH, 0, 0, lw, lh);
+    const frame = lctx.getImageData(0,0,lw,lh);
+    const data = frame.data;
 
-    // criamos dois buffers no canvas: uma forma simples é desenhar video duas vezes em áreas separadas do canvas e ler pixels; mas para performance podemos ler uma vez e manipular
-    // desenha o vídeo inteiro numa camada offscreen (no próprio canvas) e ler os dados
-    // criar offscreen imagem:
-    // nota: para mobile performance, reduzimos resolução se for muito grande
-    ctx.drawImage(video, 0, 0, w, h);
-    let frame = ctx.getImageData(0,0,w,h);
-    let data = frame.data;
+    // Buffers de saída para cada olho
+    const L = new Uint8ClampedArray(data.length);
+    const R = new Uint8ClampedArray(data.length);
 
-    // copiamos para outra array para deslocamento
-    // cria um array para saída
-    const out = new Uint8ClampedArray(data.length);
+    const br = Number(bright.value);
+    const gm = Number(gamma.value);
 
-    // para cada pixel (x,y) calcular do pixel x-shift (vermelho) e x+shift (ciano)
-    // iteramos y inner to outer for cache
-    for (let y=0; y<h; y++){
-      for (let x=0; x<w; x++){
-        const i = (y*w + x) * 4;
+    // Decodificação anaglyph:
+    // - OLHO ESQUERDO: canal R (vermelho) -> luminância
+    // - OLHO DIREITO: canais G e B (ciano) -> luminância
+    for(let i=0; i<data.length; i+=4){
+      const r = data[i];
+      const g = data[i+1];
+      const b = data[i+2];
 
-        // índice fonte para vermelho (esquerda - shift)
-        let sx = x - shift;
-        if (sx < 0) sx = 0;
-        const si_r = (y*w + sx) * 4;
+      // luminâncias simples (rápidas). Opcionalmente, podes usar ponderações.
+      let leftY  = r;          // do canal vermelho
+      let rightY = (g + b)/2;  // do canal ciano
 
-        // índice fonte para ciano (direita + shift)
-        let dx = x + shift;
-        if (dx >= w) dx = w - 1;
-        const si_c = (y*w + dx) * 4;
+      // brilho e gama
+      leftY  = clamp(applyGamma(leftY * br, gm), 0, 255);
+      rightY = clamp(applyGamma(rightY * br, gm), 0, 255);
 
-        // vermelho: só canal R do si_r
-        out[i]   = data[si_r];      // R
-        // verde: do si_c (ciano usa G + B)
-        out[i+1] = data[si_c+1];    // G
-        // azul: do si_c
-        out[i+2] = data[si_c+2];    // B
-        // alpha: média ou 255
-        out[i+3] = 255;
-      }
+      // saída grayscale para cada olho
+      L[i] = L[i+1] = L[i+2] = leftY;  L[i+3] = 255;
+      R[i] = R[i+1] = R[i+2] = rightY; R[i+3] = 255;
     }
 
-    // coloca saída no canvas
-    const outImg = new ImageData(out, w, h);
-    ctx.putImageData(outImg, 0, 0);
+    // pintar em cada canvas
+    const limg = new ImageData(L, lw, lh);
+    const rimg = new ImageData(R, rw, rh);
 
-    // se o utilizador quiser espelhar (útil em algumas câmaras), aplicamos transformação visual no CSS:
-    if (mirror) {
-      canvas.style.transform = 'scaleX(-1)';
-    } else {
-      canvas.style.transform = 'none';
+    if(mirror){
+      // espelhar horizontalmente (útil consoante a forma como seguras o telefone)
+      lctx.save(); lctx.scale(-1,1); lctx.putImageData(limg, -lw, 0); lctx.restore();
+      rctx.save(); rctx.scale(-1,1); rctx.putImageData(rimg, -rw, 0); rctx.restore();
+    }else{
+      lctx.putImageData(limg, 0, 0);
+      rctx.putImageData(rimg, 0, 0);
     }
 
-    requestAnimationFrame(renderAnaglyph);
+    requestAnimationFrame(draw);
   }
-
-  // iniciar loop quando o vídeo começa a correr
-  requestAnimationFrame(renderAnaglyph);
-
+  requestAnimationFrame(draw);
 })();
 </script>
 </body>
