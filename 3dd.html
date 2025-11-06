@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Efeito Anáglifo 3D</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+        }
+        #camera {
+            width: 80%;
+            height: 80%;
+            transform: scaleX(-1); /* Espelha a imagem da câmera para parecer mais natural */
+        }
+        .anaglyph {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            mix-blend-mode: color-dodge;
+        }
+        .red {
+            filter: sepia(1) saturate(10) hue-rotate(-45deg);
+        }
+        .blue {
+            filter: sepia(1) saturate(10) hue-rotate(150deg);
+        }
+    </style>
+</head>
+<body>
+    <video id="camera" autoplay></video>
+    <div class="anaglyph red" id="left-eye"></div>
+    <div class="anaglyph blue" id="right-eye"></div>
+
+    <script>
+        // Função para acessar a câmera
+        async function startCamera() {
+            const video = document.getElementById('camera');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error("Erro ao acessar a câmera:", err);
+            }
+        }
+
+        // Chama a função de início da câmera
+        startCamera();
+    </script>
+</body>
+</html>
