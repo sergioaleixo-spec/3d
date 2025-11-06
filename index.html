@@ -38,7 +38,7 @@
             left: 0;
             width: 50%;
             height: 100%;
-            filter: sepia(1) saturate(10) hue-rotate(-60deg);
+            filter: sepia(1) saturate(10) hue-rotate(-60deg); /* Efeito vermelho */
         }
 
         /* Metade da tela com o efeito verde (olho direito) */
@@ -48,7 +48,7 @@
             right: 0;
             width: 50%;
             height: 100%;
-            filter: sepia(1) saturate(10) hue-rotate(120deg);
+            filter: sepia(1) saturate(10) hue-rotate(120deg); /* Efeito verde */
         }
 
     </style>
@@ -70,6 +70,7 @@
             };
 
             try {
+                // Acessa a câmera do dispositivo
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
             } catch (err) {
